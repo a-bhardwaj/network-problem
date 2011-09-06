@@ -36,6 +36,7 @@ REMARK :					As soon as you apply any control callbacks cplex by
 #include <stdio.h>
 #include <time.h> 
 #include <math.h>
+#include <conio.h>
 
 //@var		rootRelaxationObjValue	:	To store the objective value of the root relaxation.
 
@@ -95,16 +96,14 @@ IloNum
 	  IloNumArray	d,
 	  IloNum		omega) {
 	
-	IloEnv	env		= a.getEnv();
 	IloNum	nCols	= a.getSize();
-	IloNumArray		d_sq(env,nCols);
+	int i;
 
-	for (int i = 0; i < nCols; i++) {
-		d_sq[i] = pow(d[i], 2);
-	}
+	IloNum value = 0, varValue = 0;
+	for (i = 0; i < nCols; i++)
+		varValue += x[i]*d[i]*d[i];
 
-	IloNum value = 0;
-	value = IloScalProd(a,x) + omega*sqrt(IloScalProd(d_sq,x));
+	value = IloScalProd(a,x) + omega*sqrt(varValue);
 	return value;
 }
 
@@ -125,7 +124,6 @@ bool
 	alreadyExists(IloNumArray	pack,
 				  IloNumArray2	packs) {
 	
-	IloEnv env = packs.getEnv();
 	bool isSame = false;
 	int nRows = packs.getSize(), nCols;
 	if (nRows > 0){
@@ -172,12 +170,11 @@ void
    y = temp; 
 }
 
-IloNumArray 
-	bubbleSort (IloNumArray Array) { 
+void 
+	bubbleSort (IloNumArray Array, IloNumArray order) {
    IloInt size = Array.getSize();
    int last = size - 2; 
    int isChanged = 1;
-   IloNumArray order(Array.getEnv(), size);
    for(int i = 0; i < size; i++)
 	   order[i] = i;
    while ( last >= 0 && isChanged) 
@@ -192,37 +189,38 @@ IloNumArray
                } 
            last--; 
    }
-   return order;
 }
 
-IloNumArray 
+bool 
 	getSubsets(IloNumArray	Array, 
 			   IloNumArray	order, 
 			   IloNum		limit,
 			   IloNumArray	a,
 			   IloNumArray	d,
 			   IloNum		b,
-			   IloNum		omega) {
-	IloEnv env = Array.getEnv();
+			   IloNum		omega,
+			   IloNumArray	newPack) {
+	
 	IloNum nCols = Array.getSize();
 	int i;
-	IloNumArray pack(env, nCols);
 	bool packFound = false;
-
+	
 	for(i = 0; i < nCols; i++) {
-		pack[i] = 1;
+		newPack[i] = 1;
 	}
-
+	
 	IloNum	sum = 0;
+	
 	i = 0;
+
 	while(i < nCols) {
 		if (a[order[i]] == 0) {
 			i++;
 			continue;
 		}
-		pack[order[i]] = 0;
+		newPack[order[i]] = 0;
 		sum += Array[order[i]];
-		if(f(pack,a,d,omega) > b + EPS) {
+		if(f(newPack,a,d,omega) > b + EPS) {
 			packFound = true;
 			break;
 		}
@@ -230,11 +228,8 @@ IloNumArray
 			i++;
 		}
 	}	
-	if(packFound) {
-		return pack;
-	}
-	else
-		return IloNumArray(env,nCols);
+	
+	return packFound;
 }
 
 //@method	getPacksUsingSort		:	To retrive a pack for the conic quadratic constraint using Greedy Algorithm.
@@ -245,7 +240,7 @@ void
 					  IloNum		b,
 					  IloNum		omega,
 					  IloNumArray	xbar) {
-	int i, j, k;
+	int i, j, k,l;
 	IloEnv	env		= xbar.getEnv();
 	IloNum	nCols	= xbar.getSize();
 
@@ -263,27 +258,27 @@ void
 		for (j = i + 1; j < nCols; j++) {
 			if(a[j] == 0)
 				continue;
-			//env.out() << "i : " << i << " ,  j : " << j << endl << endl;
 			lambda	= (c[j]*xbar[i] - c[i]*xbar[j])/(c[j]*a[i] - c[i]*a[j]);
 			mu		= (a[j]*xbar[i] - a[i]*xbar[j])/(c[i]*a[j] - c[j]*a[i]);
-			//env.out() << "lambda : " << lambda << " , mu : " << mu << endl << endl;
 			if(lambda <= 0 && mu <= 0) {
 				for (k = 0; k < nCols; k++) {
 					arrayToSort[k] = xbar[k]/(lambda*a[k] + mu*c[k] + EPS);
 				}
-				order	= bubbleSort(arrayToSort);
-				newPack = getSubsets(xbar, order, 1, a, d, b, omega);
-				if(IloSum(newPack) > 0 && !alreadyExists(newPack, packs)) {
-					//env.out() << "Pack Added : " << newPack << endl;
-					packs.add(newPack);
+				bubbleSort(arrayToSort, order);
+				if(getSubsets(xbar, order, 1, a, d, b, omega,newPack) && !alreadyExists(newPack, packs)) {
+					k = packs.getSize();
+					packs.add(IloNumArray(env,nCols));
+					for (l = 0; l < nCols; l++)
+						packs[k][l] = newPack[l];
 				}
 			}
 		}
 	}
+	arrayToSort.end(); order.end(); newPack.end(); c.end();
 }
 
 //@method	makeMaximal					:	To make the pack maximal.
-IloNumArray
+void
 	makeMaximal(IloNumArray toExtend,
 				IloNumArray	a,
 				IloNumArray	d,
@@ -291,27 +286,21 @@ IloNumArray
 				IloNum		b) {
 	int i;
 
-	IloEnv env		= toExtend.getEnv();
 	IloNum nCols	= a.getSize();
 	IloNumArray fromExtend	= getComplement(toExtend);
-	IloNumArray maximalPack(env, nCols);
-
-	for(i = 0; i < nCols; i++)
-		maximalPack[i] = toExtend[i];
-
+	
 	IloIntArray fromIndices = findIndices(fromExtend);
 	
 	for(i = 0; i < fromIndices.getSize(); i++) {
 		if (a[fromIndices[i]] == 0) {
-			maximalPack[fromIndices[i]] = 1;
+			toExtend[fromIndices[i]] = 1;
 			continue;
 		}
-		maximalPack[fromIndices[i]] = 1;
-		if(f(maximalPack, a , d, omega) <= b) {
-			maximalPack[fromIndices[i]] = 0;
+		toExtend[fromIndices[i]] = 1;
+		if(f(toExtend, a , d, omega) <= b) {
+			toExtend[fromIndices[i]] = 0;
 		}
 	}
-	return maximalPack;
 }
 
 IloNum 
@@ -580,7 +569,7 @@ ILOLAZYCONSTRAINTCALLBACK7(extendedPackInequalities,
 		   int i;
 		   IloEnv env		=	getEnv();
 		   IloInt nbArcs	=	a.getSize();
-		   IloNumArray	X(env, nbArcs), gradient(env,nbArcs);
+		   IloNumArray	X(env, nbArcs);
 		   IloNumArray2	packs(env);
 		   IloNumArray currentPack(env, nbArcs), packComplement(env, nbArcs), extended(env, nbArcs);
 		   IloNum rhs;
@@ -603,7 +592,7 @@ ILOLAZYCONSTRAINTCALLBACK7(extendedPackInequalities,
 			   getPackUsingSort(packs, a_pack, d_pack, b_pack, omega, X);
 			   for (i = 0; i < packs.getSize(); i++) {
 				   currentPack		= getRow(packs, i);
-				   currentPack		= makeMaximal(currentPack, a_pack, d_pack, omega, b_pack);
+				   makeMaximal(currentPack, a_pack, d_pack, omega, b_pack);
 				   packComplement	= getComplement(currentPack);
 				   rhs				= IloSum(packComplement);
 				   extended			= extendPackIneq(packComplement, a_pack, d_pack, omega, b_pack);
@@ -613,6 +602,7 @@ ILOLAZYCONSTRAINTCALLBACK7(extendedPackInequalities,
 					   IloRange	cut;
 					   try {
 						   cut = (IloScalProd(extended,x) >= rhs);
+						   //cout << cut << endl << endl;
 						   add(cut).end();
 					   }
 				   
@@ -622,6 +612,8 @@ ILOLAZYCONSTRAINTCALLBACK7(extendedPackInequalities,
 					   }
 				   }
 			   }
+			   packs.end(); currentPack.end(); packComplement.end();
+			   extended.end(); minCut.end(); X.end(); a_pack.end(); d_pack.end();
 		   }
 	   }
 	   catch (IloException &e) {
@@ -756,7 +748,7 @@ int
 		  const char* input_file = strcat(strcat(input,argv[1]),".dat");
 		  
 		  const char* filename  = input_file;
-
+		  
 		  for (i = 2; i < argc-1; i++) { //command line options
 			  if (!strncmp(argv[i],  "-a", 2)) {
 				  algo = atoi(argv[++i]); //The type of user cuts to use, 0: No Cuts, 1: Linearized, 2: Packs 
@@ -914,6 +906,7 @@ int
 			  output_file = strcat(strcat(output,"LinearizedCuts"),".log");
 		  else if (algo == 2)
 			  output_file = strcat(strcat(output,"ExtendedPacksCuts"),".log");
+
 
 		  if(FileExists(output_file)) {
 			  fout.open(output_file, ios::app);
