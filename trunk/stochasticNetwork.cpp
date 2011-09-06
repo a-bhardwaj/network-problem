@@ -36,7 +36,6 @@ REMARK :					As soon as you apply any control callbacks cplex by
 #include <stdio.h>
 #include <time.h> 
 #include <math.h>
-#include <conio.h>
 
 //@var		rootRelaxationObjValue	:	To store the objective value of the root relaxation.
 
