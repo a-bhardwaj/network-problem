@@ -190,36 +190,35 @@ void
    }
 }
 
-bool 
+
+IloNumArray 
 	getSubsets(IloNumArray	Array, 
-			   IloNumArray	order, 
-			   IloNum		limit,
-			   IloNumArray	a,
-			   IloNumArray	d,
-			   IloNum		b,
-			   IloNum		omega,
-			   IloNumArray	newPack) {
-	
+					  IloNumArray	order, 
+					  IloNum		limit,
+					  IloNumArray	a,
+					  IloNumArray	d,
+					  IloNum		b,
+					  IloNum		omega) {
+	IloEnv env = Array.getEnv();
 	IloNum nCols = Array.getSize();
 	int i;
+	IloNumArray pack(env, nCols);
 	bool packFound = false;
-	
-	for(i = 0; i < nCols; i++) {
-		newPack[i] = 1;
-	}
-	
-	IloNum	sum = 0;
-	
-	i = 0;
 
+	for(i = 0; i < nCols; i++) {
+		pack[i] = 1;
+	}
+
+	IloNum	sum = 0;
+	i = 0;
 	while(i < nCols) {
 		if (a[order[i]] == 0) {
 			i++;
 			continue;
 		}
-		newPack[order[i]] = 0;
+		pack[order[i]] = 0;
 		sum += Array[order[i]];
-		if(f(newPack,a,d,omega) > b + EPS) {
+		if(f(pack,a,d,omega) > b + EPS) {
 			packFound = true;
 			break;
 		}
@@ -227,8 +226,11 @@ bool
 			i++;
 		}
 	}	
-	
-	return packFound;
+	if(packFound) {
+		return pack;
+	}
+	else
+		return IloNumArray(env, nCols);
 }
 
 //@method	getPacksUsingSort		:	To retrive a pack for the conic quadratic constraint using Greedy Algorithm.
@@ -264,11 +266,9 @@ void
 					arrayToSort[k] = xbar[k]/(lambda*a[k] + mu*c[k] + EPS);
 				}
 				bubbleSort(arrayToSort, order);
-				if(getSubsets(xbar, order, 1, a, d, b, omega,newPack) && !alreadyExists(newPack, packs)) {
-					k = packs.getSize();
-					packs.add(IloNumArray(env,nCols));
-					for (l = 0; l < nCols; l++)
-						packs[k][l] = newPack[l];
+				newPack = getSubsets(xbar, order, 1, a, d, b, omega);
+				if(IloSum(newPack) > 0 && !alreadyExists(newPack, packs)) {
+					packs.add(newPack);
 				}
 			}
 		}
