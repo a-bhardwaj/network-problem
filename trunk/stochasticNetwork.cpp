@@ -146,20 +146,6 @@ bool
 	return isSame;
 }
 
-//@method	getRow					:	To retrive a rowId'th row of a matrix.
-IloNumArray
-	getRow(IloNumArray2 matrix,
-		   IloInt		rowId) {
-	IloEnv env = matrix.getEnv();
-	int i, n = matrix[0].getSize();
-	IloNumArray vector(env, n);
-
-	for (i = 0; i < n; i++)
-		vector[i] = matrix[rowId][i];
-
-	return vector;
-}
-
 void 
 	swap (int& x, 
 		  int& y ) {
@@ -590,7 +576,7 @@ ILOLAZYCONSTRAINTCALLBACK7(extendedPackInequalities,
 			   b_pack = -b;
 			   getPackUsingSort(packs, a_pack, d_pack, b_pack, omega, X);
 			   for (i = 0; i < packs.getSize(); i++) {
-				   currentPack		= getRow(packs, i);
+				   currentPack = packs[i];
 				   makeMaximal(currentPack, a_pack, d_pack, omega, b_pack);
 				   packComplement	= getComplement(currentPack);
 				   rhs				= IloSum(packComplement);
