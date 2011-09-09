@@ -38,11 +38,11 @@ REMARK :					As soon as you apply any control callbacks cplex by
 #include <math.h>
 
 //@var		rootRelaxationObjValue	:	To store the objective value of the root relaxation.
+ILOSTLBEGIN
 
 IloNum sepObjValue;
 static IloInt cutsAdded = 0;
-
-ILOSTLBEGIN
+static int linearNodes = 0;
 
 #define EPSILON 1e-4
 #define EPS 1e-7
@@ -717,6 +717,7 @@ ILOUSERCUTCALLBACK7(userlinearizedInequalities,
 					const IloNum,		omega,
 					const IloNum,		b,
 					const IloInt,		nbNodes) {
+	if (getNnodes() == linearNodes) {
       try {
 		   IloEnv env		=	getEnv();
 		   IloInt nbArcs	=	a.getSize();
@@ -738,10 +739,12 @@ ILOUSERCUTCALLBACK7(userlinearizedInequalities,
 				   throw;
 			   }
 		   }
+		   linearNodes++;
 	   }
 	   catch (IloException &e) {
 		   cerr << "Error in linearizedInequalities Callback: " << e << endl;
 		   throw;
+	   }
 	   }
 }
 
