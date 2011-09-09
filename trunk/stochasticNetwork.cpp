@@ -624,7 +624,6 @@ ILOLAZYCONSTRAINTCALLBACK7(lazyextendedPackInequalities,
 			   IloNumArray currentPack(env, nbArcs), packComplement(env, nbArcs), extended(env, nbArcs);
 			   IloNum rhs;
 			   getValues(X,x);
-			   flog.open("PackIneqs.log", ios::app);
 			   for (i = 0; i < nbArcs ; i++)
 				   X[i] = IloRound(X[i]);
 			   
@@ -652,7 +651,6 @@ ILOLAZYCONSTRAINTCALLBACK7(lazyextendedPackInequalities,
 						   IloRange	cut;
 						   try {
 							   cut = (IloScalProd(extended,x) >= rhs);
-							   flog << cut << endl << endl;
 							   add(cut).end();
 						   }
 				   
@@ -664,7 +662,6 @@ ILOLAZYCONSTRAINTCALLBACK7(lazyextendedPackInequalities,
 				   }
 				   packs.end(); currentPack.end(); packComplement.end();
 				   extended.end(); minCut.end(); X.end(); a_pack.end(); d_pack.end();
-				   flog.close();
 			   }
 		   }
 		   catch (IloException &e) {
