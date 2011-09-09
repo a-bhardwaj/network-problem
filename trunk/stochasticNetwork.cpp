@@ -259,7 +259,7 @@ void
 			}
 		}
 	}
-	arrayToSort.end(); order.end(); newPack.end(); c.end();
+	arrayToSort.end(); order.end(); c.end();
 }
 
 //@method	makeMaximal					:	To make the pack maximal.
@@ -542,7 +542,7 @@ bool
 	return flag;
 }
 
-ILOLAZYCONSTRAINTCALLBACK7(extendedPackInequalities,
+ILOUSERCUTCALLBACK7(userextendedPackInequalities,
 					IloNumVarArray,		x,
 					const IloNumArray2, N,
 					const IloNumArray,	a,
@@ -550,6 +550,7 @@ ILOLAZYCONSTRAINTCALLBACK7(extendedPackInequalities,
 					const IloNum,		omega,
 					const IloNum,		b,
 					const IloInt,		nbNodes) {
+	//if (getNnodes() == 0) {
       try {
 		   int i;
 		   IloEnv env		=	getEnv();
@@ -560,8 +561,6 @@ ILOLAZYCONSTRAINTCALLBACK7(extendedPackInequalities,
 		   IloNum rhs;
 		   getValues(X,x);
 		   
-		   /*for (i = 0; i < nbArcs ; i++)
-			   X[i] = IloRound(X[i]);*/
 
 		   IloNumArray a_pack(env, nbArcs), d_pack(env,nbArcs);
 		   IloNum b_pack;
@@ -604,10 +603,77 @@ ILOLAZYCONSTRAINTCALLBACK7(extendedPackInequalities,
 	   catch (IloException &e) {
 		   cerr << "Error in extendedPackInequalities Callback: " << e << endl;
 		   throw;
-	   }
+		   }
+//	}
  }
 
-ILOLAZYCONSTRAINTCALLBACK7(linearizedInequalities,
+ILOLAZYCONSTRAINTCALLBACK7(lazyextendedPackInequalities,
+					IloNumVarArray,		x,
+					const IloNumArray2, N,
+					const IloNumArray,	a,
+					const IloNumArray,	d, 
+					const IloNum,		omega,
+					const IloNum,		b,
+					const IloInt,		nbNodes) {
+		  try {
+			   int i;
+			   IloEnv env		=	getEnv();
+			   IloInt nbArcs	=	a.getSize();
+			   IloNumArray	X(env, nbArcs);
+			   IloNumArray2	packs(env);
+			   IloNumArray currentPack(env, nbArcs), packComplement(env, nbArcs), extended(env, nbArcs);
+			   IloNum rhs;
+			   getValues(X,x);
+			   flog.open("PackIneqs.log", ios::app);
+			   for (i = 0; i < nbArcs ; i++)
+				   X[i] = IloRound(X[i]);
+			   
+			   IloNumArray a_pack(env, nbArcs), d_pack(env,nbArcs);
+			   IloNum b_pack;
+		   
+			   IloNumArray minCut = findMinimumCut(X, sepObjValue, nbArcs, nbNodes, N, a, d, omega);
+		   
+			   if(sepObjValue < b) {
+				   for(i = 0; i < nbArcs; i++) {
+					   a_pack[i] = -a[i]*minCut[i];
+					   d_pack[i] = d[i]*minCut[i];
+				   }
+				   b_pack = -b;
+				   getPackUsingSort(packs, a_pack, d_pack, b_pack, omega, X);
+				   for (i = 0; i < packs.getSize(); i++) {
+					   currentPack = packs[i];
+					   makeMaximal(currentPack, a_pack, d_pack, omega, b_pack);
+					   packComplement	= getComplement(currentPack);
+					   rhs				= IloSum(packComplement);
+					   extended			= extendPackIneq(packComplement, a_pack, d_pack, omega, b_pack);
+					   rhs				= IloSum(extended) - rhs + 1;
+				   
+					   if(IloScalProd(extended,X) < rhs - EPSILON) {
+						   IloRange	cut;
+						   try {
+							   cut = (IloScalProd(extended,x) >= rhs);
+							   flog << cut << endl << endl;
+							   add(cut).end();
+						   }
+				   
+						   catch(...) {
+							   cut.end();
+							   throw;
+						   }
+					   }
+				   }
+				   packs.end(); currentPack.end(); packComplement.end();
+				   extended.end(); minCut.end(); X.end(); a_pack.end(); d_pack.end();
+				   flog.close();
+			   }
+		   }
+		   catch (IloException &e) {
+			   cerr << "Error in extendedPackInequalities Callback: " << e << endl;
+			   throw;
+		   }
+ }
+
+ILOLAZYCONSTRAINTCALLBACK7(lazylinearizedInequalities,
 					IloNumVarArray,		x,
 					const IloNumArray2, N,
 					const IloNumArray,	a,
@@ -622,8 +688,44 @@ ILOLAZYCONSTRAINTCALLBACK7(linearizedInequalities,
 		   int i;
 		   getValues(X,x);
 		   
-		   /*for (i = 0; i < nbArcs ; i++)
-			   X[i] = IloRound(X[i]);*/
+		   for (i = 0; i < nbArcs ; i++)
+			   X[i] = IloRound(X[i]);
+		   
+		   IloNumArray minCut = findMinimumCut(X, sepObjValue, nbArcs, nbNodes, N, a, d, omega);
+		   if(sepObjValue < b) {
+			   IloNum rhs;
+			   gradient = findGradient(X,minCut,rhs,b,nbArcs,nbNodes,a,d,omega,N);
+			   IloRange	cut;
+			   try {
+				   cut = (IloScalProd(gradient,x) >= rhs);
+				   add(cut).end();
+			   }
+			   catch(...) {
+				   cut.end();
+				   throw;
+			   }
+		   }
+	   }
+	   catch (IloException &e) {
+		   cerr << "Error in linearizedInequalities Callback: " << e << endl;
+		   throw;
+	   }
+}
+
+ILOUSERCUTCALLBACK7(userlinearizedInequalities,
+					IloNumVarArray,		x,
+					const IloNumArray2, N,
+					const IloNumArray,	a,
+					const IloNumArray,	d, 
+					const IloNum,		omega,
+					const IloNum,		b,
+					const IloInt,		nbNodes) {
+      try {
+		   IloEnv env		=	getEnv();
+		   IloInt nbArcs	=	a.getSize();
+		   IloNumArray	X(env, nbArcs), gradient(env,nbArcs);
+		   int i;
+		   getValues(X,x);
 		   
 		   IloNumArray minCut = findMinimumCut(X, sepObjValue, nbArcs, nbNodes, N, a, d, omega);
 		   if(sepObjValue < b) {
@@ -854,7 +956,8 @@ int
 		  if (algo == 1) {
 			  cplex.clearModel();
 			  cplex.extract(model);
-			  cplex.use(linearizedInequalities(env,x,N,a,d,omega,b,nbNodes));
+			  cplex.use(lazylinearizedInequalities(env,x,N,a,d,omega,b,nbNodes));
+			  cplex.use(userlinearizedInequalities(env,x,N,a,d,omega,b,nbNodes));
 			  start = clock();
 			  cplex.solve();
 			  end	= clock();
@@ -862,12 +965,17 @@ int
 			  totalNodes = cplex.getNnodes();
 			  cutsAdded = cplex.getNcuts(IloCplex::CutUser);
 			  cpuTime	= (double)(end - start) / CLOCKS_PER_SEC;
+			  if (cplex.getStatus() == IloAlgorithm::Optimal)
+				  flag = true;
+			  else
+				  flag = false;
 		  }
 			
 		  if (algo == 2) {
 			  cplex.clearModel();
 			  cplex.extract(model);
-			  cplex.use(extendedPackInequalities(env,x,N,a,d,omega,b,nbNodes));
+			  cplex.use(lazyextendedPackInequalities(env,x,N,a,d,omega,b,nbNodes));
+			  cplex.use(userextendedPackInequalities(env,x,N,a,d,omega,b,nbNodes));
 			  start = clock();
 			  cplex.solve();
 			  end	= clock();
@@ -875,11 +983,12 @@ int
 			  totalNodes = cplex.getNnodes();
 			  cutsAdded = cplex.getNcuts(IloCplex::CutUser);
 			  cpuTime	= (double)(end - start) / CLOCKS_PER_SEC;
-		  }
-		  
-		  
-		  gap		= fabs(100*IloMax(b - sepObjValue,0)/(b));
-		  
+			  if (cplex.getStatus() == IloAlgorithm::Optimal)
+				  flag = true;
+			  else
+				  flag = false;
+		  }	
+
 		  if(cpuTime < 0)
 			  cpuTime	= (double)(end - start) / CLOCKS_PER_SEC;
 		  
@@ -899,14 +1008,13 @@ int
 			  fout << nbArcs << "\t";
 			  fout << beta << "\t";
 			  fout << omega << "\t";
-			  if (gap == 0)
+			  if (flag)
 				  fout << "OPTIMAL \t" ;
 			  else
 				  fout << "NOT OPTIMAL \t";
 
 			  fout << objValue << "\t";
 			  fout << cutsAdded << "\t";
-			  fout << gap << "\t" ;
 			  fout << totalNodes << "\t" ;
 			  fout << cpuTime << "\n";
 		  }
@@ -920,21 +1028,19 @@ int
 			  fout << "STATUS\t";
 			  fout << "OBJ VAL\t";
 			  fout << "# CUTS\t";
-			  fout << "GAP VAL\t";
 			  fout << "# NODES\t";
 			  fout << "CPUTIME\n";
 			  fout << nbNodes << "\t";
 			  fout << nbArcs << "\t";
 			  fout << beta << "\t";
 			  fout << omega << "\t";
-			  if (gap == 0)
+			  if (flag)
 				  fout << "OPTIMAL \t" ;
 			  else
 				  fout << "NOT OPTIMAL \t";
 
 			  fout << objValue << "\t";
 			  fout << cutsAdded << "\t";
-			  fout << gap << "\t" ;
 			  fout << totalNodes << "\t" ;
 			  fout << cpuTime << "\n";
 		  }
