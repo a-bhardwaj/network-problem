@@ -1012,7 +1012,7 @@ int
 		  if(cpuTime < 0)
 			  cpuTime	= (double)(end - start) / CLOCKS_PER_SEC;
 		  
-		  IloNum gap		= fabs(100*(objValue - rootRelaxationObjValue)/(objValue));
+		  gap		= fabs(100*(objValue - rootRelaxationObjValue)/(objValue));
 		  const char* output_file;
 
 		  if (algo == 0) 
