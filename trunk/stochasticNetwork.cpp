@@ -412,7 +412,7 @@ IloNumArray
 		consVarTerm += pow(d[i],2)*minCut[i]*pointvar[i]*pointvar[i];
 		modelFindPoint.add(pointvar[i] >= 0);
 	}
-	modelFindPoint.add(tempvar == consMeanTerm - b);
+	modelFindPoint.add(tempvar <= consMeanTerm - b);
 	modelFindPoint.add(tempvar*tempvar >= omega*omega*consVarTerm);
 	IloCplex cplexPoint(modelFindPoint);
 	cplexPoint.setParam(IloCplex::BarQCPEpComp, 1e-10);
