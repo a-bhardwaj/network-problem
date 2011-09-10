@@ -43,6 +43,7 @@ ILOSTLBEGIN
 IloNum sepObjValue;
 static IloInt cutsAdded = 0;
 static int linearNodes = 0;
+static IloNum rootRelaxationObjValue;
 
 #define EPSILON 1e-4
 #define EPS 1e-7
@@ -560,6 +561,8 @@ ILOUSERCUTCALLBACK7(userextendedPackInequalities,
 		   IloNumArray currentPack(env, nbArcs), packComplement(env, nbArcs), extended(env, nbArcs);
 		   IloNum rhs;
 		   getValues(X,x);
+			   if(getNnodes() == 0)
+				   rootRelaxationObjValue = getObjValue();
 		   
 
 		   IloNumArray a_pack(env, nbArcs), d_pack(env,nbArcs);
@@ -624,6 +627,8 @@ ILOLAZYCONSTRAINTCALLBACK7(lazyextendedPackInequalities,
 			   IloNumArray currentPack(env, nbArcs), packComplement(env, nbArcs), extended(env, nbArcs);
 			   IloNum rhs;
 			   getValues(X,x);
+			   if(getNnodes() == 0)
+				   rootRelaxationObjValue = getObjValue();
 			   for (i = 0; i < nbArcs ; i++)
 				   X[i] = IloRound(X[i]);
 			   
@@ -685,6 +690,9 @@ ILOLAZYCONSTRAINTCALLBACK7(lazylinearizedInequalities,
 		   int i;
 		   getValues(X,x);
 		   
+		   if(getNnodes() == 0)
+			   rootRelaxationObjValue = getObjValue();
+		   
 		   for (i = 0; i < nbArcs ; i++)
 			   X[i] = IloRound(X[i]);
 		   
@@ -724,6 +732,9 @@ ILOUSERCUTCALLBACK7(userlinearizedInequalities,
 		   IloNumArray	X(env, nbArcs), gradient(env,nbArcs);
 		   int i;
 		   getValues(X,x);
+
+		   if(getNnodes() == 0)
+			   rootRelaxationObjValue = getObjValue();
 		   
 		   IloNumArray minCut = findMinimumCut(X, sepObjValue, nbArcs, nbNodes, N, a, d, omega);
 		   if(sepObjValue < b) {
@@ -807,6 +818,14 @@ void
 	  }
 }
 
+//callback to find rootRelaxationObjValue 
+//when no cuts are added
+ILOUSERCUTCALLBACK0(getRootRelaxationObjValue){
+    IloInt numNodes = getNnodes();
+    if (numNodes == 0){
+        rootRelaxationObjValue = getObjValue();
+    }
+}
 
 int
 	main(int argc, char **argv) {
@@ -934,6 +953,7 @@ int
 			  while(flag == 0 && cpuTime <= TIM_LIM) {
 				  cplex.clearModel();
 				  cplex.extract(model);
+				  cplex.use(getRootRelaxationObjValue(env));
 				  // Optimize the problem and obtain solution.
 				  cplex.setParam(IloCplex::TiLim, TIM_LIM - cpuTime);
 				  start = clock();
@@ -992,6 +1012,7 @@ int
 		  if(cpuTime < 0)
 			  cpuTime	= (double)(end - start) / CLOCKS_PER_SEC;
 		  
+		  IloNum gap		= fabs(100*(objValue - rootRelaxationObjValue)/(objValue));
 		  const char* output_file;
 
 		  if (algo == 0) 
@@ -1014,6 +1035,7 @@ int
 				  fout << "NOT OPTIMAL \t";
 
 			  fout << objValue << "\t";
+			  fout << gap << "\t";
 			  fout << cutsAdded << "\t";
 			  fout << totalNodes << "\t" ;
 			  fout << cpuTime << "\n";
@@ -1027,6 +1049,7 @@ int
 			  fout << "OMEGA\t";
 			  fout << "STATUS\t";
 			  fout << "OBJ VAL\t";
+			  fout << "GAP VAL\t";
 			  fout << "# CUTS\t";
 			  fout << "# NODES\t";
 			  fout << "CPUTIME\n";
@@ -1040,6 +1063,7 @@ int
 				  fout << "NOT OPTIMAL \t";
 
 			  fout << objValue << "\t";
+			  fout << gap << "\t";
 			  fout << cutsAdded << "\t";
 			  fout << totalNodes << "\t" ;
 			  fout << cpuTime << "\n";
