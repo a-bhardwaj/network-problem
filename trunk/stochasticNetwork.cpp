@@ -431,11 +431,16 @@ IloNumArray
 		gradient[i] = a[i]*minCut[i] - (1/sqrt(var))*omega*pow(d[i],2)*minCut[i]*point[i];
 
 	rhs = IloScalProd(point,gradient) - functionVal;
+	
+	double objval = cplexPoint.getObjValue();
 
 	point.end(); pointvar.end(); tempvar.end(); obj.end(); modelFindPoint.end(); cplexPoint.end();
 	consMeanTerm.end(); consVarTerm.end();
-
-	return gradient;
+	
+	if(objval >= EPS)
+		return gradient;
+	else
+		return IloNumArray(env);
 }
 
 IloNumArray 
@@ -725,7 +730,6 @@ ILOUSERCUTCALLBACK7(userlinearizedInequalities,
 					const IloNum,		omega,
 					const IloNum,		b,
 					const IloInt,		nbNodes) {
-	if (getNnodes() == linearNodes) {
       try {
 		   IloEnv env		=	getEnv();
 		   IloInt nbArcs	=	a.getSize();
@@ -740,22 +744,22 @@ ILOUSERCUTCALLBACK7(userlinearizedInequalities,
 		   if(sepObjValue < b) {
 			   IloNum rhs;
 			   gradient = findGradient(X,minCut,rhs,b,nbArcs,nbNodes,a,d,omega,N);
-			   IloRange	cut;
-			   try {
-				   cut = (IloScalProd(gradient,x) >= rhs);
-				   add(cut).end();
-			   }
-			   catch(...) {
-				   cut.end();
-				   throw;
+			   if (IloSum(gradient) > 0) {
+				   IloRange	cut;
+				   try {
+					   cut = (IloScalProd(gradient,x) >= rhs);
+					   add(cut).end();
+				   }
+				   catch(...) {
+					   cut.end();
+					   throw;
+				   }
 			   }
 		   }
-		   linearNodes++;
 	   }
 	   catch (IloException &e) {
 		   cerr << "Error in linearizedInequalities Callback: " << e << endl;
 		   throw;
-	   }
 	   }
 }
 
@@ -958,16 +962,21 @@ int
 				  cplex.setParam(IloCplex::TiLim, TIM_LIM - cpuTime);
 				  start = clock();
 				  cplex.solve();
-				  cplex.getValues(sol, x);
-				  objValue	= cplex.getObjValue();
-				  totalNodes += cplex.getNnodes();
-				  /* For linear use this */
-				  for (i = 0; i < nbArcs ; i++)
-					  sol[i] = IloRound(sol[i]);
+				  try{
+					  cplex.getValues(sol, x);
+					  objValue	= cplex.getObjValue();
+					  totalNodes += cplex.getNnodes();
+					  /* For linear use this */
+					  for (i = 0; i < nbArcs ; i++)
+						  sol[i] = IloRound(sol[i]);
 		  
-				  /*-------------------Relaxation Problem Ends Here--------------------*/
-				  IloNumVar newvar(env, 0, IloInfinity, ILOFLOAT);
-				  flag = validateConic(sol,b,model,nbArcs,nbNodes,x,a,d,newvar,omega,N,sepObjValue);
+					  /*-------------------Relaxation Problem Ends Here--------------------*/
+					  IloNumVar newvar(env, 0, IloInfinity, ILOFLOAT);
+					  flag = validateConic(sol,b,model,nbArcs,nbNodes,x,a,d,newvar,omega,N,sepObjValue);
+				  }
+				  catch(...) {
+					  flag = false;
+				  }
 				  end = clock();
 				  cpuTime	+= (double)(end - start) / CLOCKS_PER_SEC;
 			  }
