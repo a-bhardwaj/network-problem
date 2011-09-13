@@ -419,28 +419,33 @@ IloNumArray
 	cplexPoint.setParam(IloCplex::BarQCPEpComp, 1e-10);
 	cplexPoint.setOut(env.getNullStream());
 	cplexPoint.setWarning(env.getNullStream());
-	cplexPoint.solve();
+	try {
+		cplexPoint.solve();
 	
-	cplexPoint.getValues(point, pointvar);
+		cplexPoint.getValues(point, pointvar);
 
-	IloNum mean = cplexPoint.getValue(consMeanTerm), var = cplexPoint.getValue(consVarTerm);
+		IloNum mean = cplexPoint.getValue(consMeanTerm), var = cplexPoint.getValue(consVarTerm);
 			  
-	functionVal = mean - omega*sqrt(var) - b;
+		functionVal = mean - omega*sqrt(var) - b;
 
-	for(i = 0; i < nbArcs; i++)
-		gradient[i] = a[i]*minCut[i] - (1/sqrt(var))*omega*pow(d[i],2)*minCut[i]*point[i];
+		for(i = 0; i < nbArcs; i++)
+			gradient[i] = a[i]*minCut[i] - (1/sqrt(var))*omega*pow(d[i],2)*minCut[i]*point[i];
 
-	rhs = IloScalProd(point,gradient) - functionVal;
+		rhs = IloScalProd(point,gradient) - functionVal;
 	
-	double objval = cplexPoint.getObjValue();
+		double objval = cplexPoint.getObjValue();
 
-	point.end(); pointvar.end(); tempvar.end(); obj.end(); modelFindPoint.end(); cplexPoint.end();
-	consMeanTerm.end(); consVarTerm.end();
+		point.end(); pointvar.end(); tempvar.end(); obj.end(); modelFindPoint.end(); cplexPoint.end();
+		consMeanTerm.end(); consVarTerm.end();
 	
-	if(objval >= EPS)
-		return gradient;
-	else
+		if(objval >= EPS)
+			return gradient;
+		else
+			return IloNumArray(env);
+	}
+	catch(...) {
 		return IloNumArray(env);
+	}
 }
 
 IloNumArray 
